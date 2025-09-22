@@ -236,23 +236,22 @@ function saveAppSettings(appId, appSecret) {
 }
 
 /**
- * 手動入力でトークン設定を行う（APPID/APPシークレット/短期トークン）
- * @param {string} appId アプリID
- * @param {string} appSecret アプリシークレット
- * @param {string} shortLivedToken 短期トークン
+ * 手動入力でトークン設定を行う（長期トークン）
+ * @param {string} longLivedToken 長期ユーザートークン
  * @return {Object} 設定結果
  */
-function setupTokensFromManualInput(appId, appSecret, shortLivedToken) {
+function setupTokensFromLongToken(longLivedToken) {
   try {
-    // アプリ設定を保存
-    saveAppSettings(appId, appSecret);
-    
-    // 長期トークンに交換
-    const longLivedTokenInfo = exchangeToLongLivedTokenWithCredentials(shortLivedToken, appId, appSecret);
-    console.log('長期トークン情報:', longLivedTokenInfo);
-    
+    if (!longLivedToken) {
+      throw new Error('長期ユーザートークンが未入力です。');
+    }
+
+    // トークン情報を取得
+    const tokenInfo = getTokenInfoFromToken(longLivedToken);
+    console.log('入力されたユーザートークン情報:', tokenInfo);
+
     // ページトークンを取得
-    const pages = getPageTokens(longLivedTokenInfo.accessToken);
+    const pages = getPageTokens(longLivedToken);
     if (pages.length === 0) {
       throw new Error('管理可能なページが見つかりません。ページの管理者権限があることを確認してください。');
     }
@@ -260,44 +259,39 @@ function setupTokensFromManualInput(appId, appSecret, shortLivedToken) {
     // 最初のページを使用
     const page = pages[0];
     console.log('選択されたページ:', page);
-    
+
     // 有効期限を計算
-    let expiresIn = longLivedTokenInfo.expiresIn;
-    
-    // 長期トークンの場合、60日間（5184000秒）に設定
-    if (expiresIn > 0 && expiresIn > 3600) {
-      // 実際の有効期限を使用
-      console.log(`長期トークンの有効期限: ${expiresIn}秒 (${Math.round(expiresIn / 86400)}日)`);
-    } else if (expiresIn > 0) {
-      // 短期トークンの場合、60日間の長期トークンとして扱う
-      console.log('短期トークンが検出されました。60日間の長期トークンとして設定します。');
-      expiresIn = 60 * 24 * 60 * 60; // 60日間
+    let expiresIn = tokenInfo.expires_in || 0;
+    if (expiresIn > 0) {
+      console.log(`トークンの有効期限: ${expiresIn}秒 (${Math.max(1, Math.round(expiresIn / 86400))}日)`);
     } else {
-      // 有効期限が不明な場合、60日間を設定
-      console.log('有効期限が不明です。60日間の長期トークンとして設定します。');
+      console.log('有効期限が取得できませんでした。60日後を目安に設定します。');
       expiresIn = 60 * 24 * 60 * 60; // 60日間
     }
-    
-    const expiresAt = new Date().getTime() + (expiresIn * 1000);
-    console.log(`最終的な有効期限: ${new Date(expiresAt).toLocaleString('ja-JP')}`);
-    
+
+    const expiresAtMs = new Date().getTime() + (expiresIn * 1000);
+    const expiresAt = new Date(expiresAtMs);
+    console.log(`保存する有効期限: ${expiresAt.toLocaleString('ja-JP')}`);
+
     // すべてのトークン情報を保存
     PropertiesService.getScriptProperties().setProperties({
-      [PROP_KEYS.USER_ACCESS_TOKEN]: longLivedTokenInfo.accessToken,
+      [PROP_KEYS.USER_ACCESS_TOKEN]: longLivedToken,
       [PROP_KEYS.PAGE_ACCESS_TOKEN]: page.access_token,
       [PROP_KEYS.PAGE_ID]: page.id,
       [PROP_KEYS.PAGE_NAME]: page.name,
-      [PROP_KEYS.TOKEN_EXPIRES_AT]: expiresAt.toString()
+      [PROP_KEYS.TOKEN_EXPIRES_AT]: expiresAtMs.toString()
     });
+
+    const tokenType = expiresIn >= 24 * 60 * 60 ? '長期' : '短期';
 
     return {
       success: true,
       pageName: page.name,
       pageId: page.id,
       pageAccessToken: page.access_token,
-      accessToken: longLivedTokenInfo.accessToken,
-      expiresAt: new Date(expiresAt),
-      tokenType: longLivedTokenInfo.expiresIn > 0 ? '長期' : '短期',
+      accessToken: longLivedToken,
+      expiresAt,
+      tokenType,
       appIdFound: true
     };
   } catch (error) {

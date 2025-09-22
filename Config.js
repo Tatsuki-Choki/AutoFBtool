@@ -21,7 +21,8 @@ const PROP_KEYS = {
   PAGE_NAME: 'FB_PAGE_NAME',
   TOKEN_EXPIRES_AT: 'FB_TOKEN_EXPIRES_AT',
   APP_ID: 'FB_APP_ID',
-  APP_SECRET: 'FB_APP_SECRET'
+  APP_SECRET: 'FB_APP_SECRET',
+  IMGBB_API_KEY: 'IMGBB_API_KEY'
 };
 
 // Facebook API設定
@@ -45,6 +46,7 @@ const DEFAULT_SETTINGS = {
   'ページID': '',
   'トークン有効期限': '',
   '最終更新日時': '',
+  'スクリプトID': '',
   'アプリID': '',
   'アプリシークレット': '',
   
@@ -57,7 +59,10 @@ const DEFAULT_SETTINGS = {
   'Facebook API バージョン': 'v23.0',
   'レート制限待機時間': '300',
   'ログ保持日数': '30',
-  'エラー通知設定': 'false'
+  'エラー通知設定': 'false',
+  
+  // 画像管理設定
+  'ImgBB APIキー': ''
 };
 
 // 設定の説明
@@ -76,6 +81,7 @@ const SETTING_DESCRIPTIONS = {
   'ページID': 'FacebookページID（自動設定）',
   'トークン有効期限': 'トークンの有効期限（自動設定）',
   '最終更新日時': '最後にトークンを更新した日時（自動設定）',
+  'スクリプトID': 'このGoogle Apps ScriptのスクリプトID（自動設定）',
   'アプリID': 'FacebookアプリID（手動設定）',
   'アプリシークレット': 'Facebookアプリシークレット（手動設定）',
   
@@ -88,7 +94,10 @@ const SETTING_DESCRIPTIONS = {
   'Facebook API バージョン': '使用するFacebook Graph APIのバージョン',
   'レート制限待機時間': 'API呼び出し間の待機時間（ミリ秒）',
   'ログ保持日数': 'ログを保持する日数',
-  'エラー通知設定': 'エラー発生時の通知設定（true/false）'
+  'エラー通知設定': 'エラー発生時の通知設定（true/false）',
+  
+  // 画像管理設定
+  'ImgBB APIキー': 'ImgBB APIキー（画像アップロード用）'
 };
 
 /**
@@ -146,4 +155,11 @@ function initializeDefaultSettings() {
   Object.keys(DEFAULT_SETTINGS).forEach(key => {
     upsertSettingIfMissing(key, DEFAULT_SETTINGS[key], SETTING_DESCRIPTIONS[key]);
   });
+
+  const scriptId = typeof ScriptApp !== 'undefined' && ScriptApp.getScriptId ? ScriptApp.getScriptId() : '';
+  if (scriptId) {
+    upsertSetting('スクリプトID', scriptId, SETTING_DESCRIPTIONS['スクリプトID']);
+  } else {
+    upsertSettingIfMissing('スクリプトID', '', SETTING_DESCRIPTIONS['スクリプトID']);
+  }
 }

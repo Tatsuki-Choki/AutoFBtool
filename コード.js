@@ -10,7 +10,39 @@
 
 // ========== メニュー ==========
 function onOpen() {
+  ensureAutomationTriggers();
   createMenu();
+}
+
+/**
+ * 時間主導トリガーを必要に応じて作成
+ */
+function ensureAutomationTriggers() {
+  try {
+    setupScheduledPostsTrigger();
+    setupAutoReplyTrigger();
+  } catch (error) {
+    console.error('トリガー設定エラー:', error);
+  }
+}
+
+/**
+ * 予約投稿・自動返信トリガーを全て削除
+ */
+function resetAutomationTriggers() {
+  try {
+    const targetHandlers = new Set(['processScheduledPosts', 'fetchAndRespond']);
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(trigger => {
+      const handler = trigger.getHandlerFunction && trigger.getHandlerFunction();
+      if (handler && targetHandlers.has(handler)) {
+        ScriptApp.deleteTrigger(trigger);
+      }
+    });
+  } catch (error) {
+    console.error('トリガー削除エラー:', error);
+    throw error;
+  }
 }
 
 
@@ -19,24 +51,62 @@ function onOpen() {
  */
 function createMenu() {
   try {
-  SpreadsheetApp.getUi()
-    .createMenu('ツール設定')
-    .addItem('1) 初期化: シート生成', 'initSheets')
+    const ui = SpreadsheetApp.getUi();
+
+    ui.createMenu('ツール設定')
+      .addItem('1) 初期化: シート生成', 'initSheets')
       .addSeparator()
-      .addSubMenu(SpreadsheetApp.getUi().createMenu('トークン管理')
+      .addSubMenu(ui.createMenu('トークン管理')
         .addItem('トークン設定', 'setupFromManualInput')
         .addItem('トークン情報を確認', 'showTokenInfo')
         .addItem('トークンを更新', 'refreshTokenManually'))
-    .addSeparator()
-    .addItem('コメント取得→返信 実行', 'fetchAndRespond')
-      .addItem('予約投稿（手動実行）', 'runScheduledPostsNow')
-      .addItem('未返信に一括返信（直近12時間）', 'runAutoReplyForLast12hUnreplied')
-      .addItem('シートを最新の状態に更新', 'updateSheetsToLatest')
+      .addSubMenu(ui.createMenu('画像管理')
+        .addItem('ImgBB APIキー設定', 'showImageUploadSettings')
+        .addItem('複数画像一括アップロード', 'showBatchImageUploadDialog')
+        .addItem('画像アップロードテスト', 'testImageUpload'))
       .addSeparator()
-      .addItem('⚠️ 全てのシートを再構成', 'rebuildAllSheets')
-    .addToUi();
+      .addItem('コメント取得→返信 実行', 'fetchAndRespond')
+        .addItem('予約投稿（手動実行）', 'runScheduledPostsNow')
+        .addItem('未返信に一括返信（直近12時間）', 'runAutoReplyForLast12hUnreplied')
+        .addItem('シートを最新の状態に更新', 'updateSheetsToLatest')
+        .addSeparator()
+        .addItem('⚠️ 全てのシートを再構成', 'rebuildAllSheets')
+      .addToUi();
+
+    ui.createMenu('クイックセットアップ')
+      .addItem('アカウント確認とトリガー初期化', 'runQuickSetup')
+      .addToUi();
   } catch (error) {
     console.error('メニュー作成エラー:', error);
+  }
+}
+
+/**
+ * アカウント情報の確認とトリガー初期化をまとめて実行
+ */
+function runQuickSetup() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const tokenInfo = getTokenInfo();
+
+    resetAutomationTriggers();
+    ensureAutomationTriggers();
+
+    const pageName = tokenInfo.pageName || '未設定';
+    const pageId = tokenInfo.pageId || '未設定';
+    const expiresAt = tokenInfo.expiresAt ? tokenInfo.expiresAt.toLocaleString('ja-JP') : '不明';
+    const status = tokenInfo.isValid ? '有効' : '無効または期限切れ';
+
+    ui.alert(
+      'クイックセットアップが完了しました。\n\n' +
+      `ページ名: ${pageName}\n` +
+      `ページID: ${pageId}\n` +
+      `トークン有効期限: ${expiresAt}\n` +
+      `トークン状態: ${status}\n\n` +
+      '予約投稿トリガー（5分間隔）と自動返信トリガー（30分間隔）を再作成しました。'
+    );
+  } catch (error) {
+    ui.alert(`❌ クイックセットアップでエラーが発生しました: ${error && error.message ? error.message : error}`);
   }
 }
 
@@ -143,7 +213,7 @@ function initSheets() {
 // ========== メイン: 取得→判定→返信 ==========
 function fetchAndRespond() {
   const token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
-  if (!token) throw new Error('アクセストークンが未設定です。メニューから「トークン管理」→「短期トークンから設定」を実行してください。');
+  if (!token) throw new Error('アクセストークンが未設定です。メニューから「トークン管理」→「トークン設定」を実行してください。');
 
   const settings = getSettings();
   const fetchLimit = parseInt(settings.get('取得件数') || '50', 10);
@@ -169,52 +239,37 @@ function fetchAndRespond() {
  * 手動入力でトークン設定を行う（改良版）
  */
 function setupFromManualInput() {
-  const ui = SpreadsheetApp.getUi();
-  
-  // HTMLダイアログで3つの入力欄を一度に表示
   const htmlOutput = HtmlService.createHtmlOutput(`
     <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 500px;">
       <h3>Facebook トークン設定</h3>
-      <p>以下の情報を入力してください：</p>
-      
-      <div style="margin-bottom: 15px;">
-        <label for="appId" style="display: block; margin-bottom: 5px; font-weight: bold;">アプリID:</label>
-        <input type="text" id="appId" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Facebook アプリのIDを入力">
-      </div>
-      
-      <div style="margin-bottom: 15px;">
-        <label for="appSecret" style="display: block; margin-bottom: 5px; font-weight: bold;">アプリシークレット:</label>
-        <input type="password" id="appSecret" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Facebook アプリのシークレットを入力">
-      </div>
-      
+      <p style="margin-bottom: 20px;">Facebook Graph API Debugger などで取得した長期ユーザートークンを入力してください。</p>
+
       <div style="margin-bottom: 20px;">
-        <label for="shortToken" style="display: block; margin-bottom: 5px; font-weight: bold;">短期トークン:</label>
-        <textarea id="shortToken" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; height: 60px;" placeholder="Facebook Graph API Explorer で取得した短期トークンを入力"></textarea>
+        <label for="longToken" style="display: block; margin-bottom: 5px; font-weight: bold;">長期ユーザートークン</label>
+        <textarea id="longToken" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; height: 80px;" placeholder="EAAG..."></textarea>
       </div>
-      
+
       <div style="text-align: center;">
         <button onclick="submitForm()" style="background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">設定実行</button>
         <button onclick="google.script.host.close()" style="background-color: #f44336; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">キャンセル</button>
       </div>
     </div>
-    
+
     <script>
       function submitForm() {
-        const appId = document.getElementById('appId').value.trim();
-        const appSecret = document.getElementById('appSecret').value.trim();
-        const shortToken = document.getElementById('shortToken').value.trim();
-        
-        if (!appId || !appSecret || !shortToken) {
-          alert('すべての項目を入力してください。');
+        const longToken = document.getElementById('longToken').value.trim();
+
+        if (!longToken) {
+          alert('長期ユーザートークンを入力してください。');
           return;
         }
-        
+
         google.script.run
           .withSuccessHandler(onSuccess)
           .withFailureHandler(onFailure)
-          .processTokenInput(appId, appSecret, shortToken);
+          .processTokenInput(longToken);
       }
-      
+
       function onSuccess(result) {
         if (result.success) {
           alert('✅ トークン設定が完了しました！\\n\\n' +
@@ -222,48 +277,47 @@ function setupFromManualInput() {
                 'ページID: ' + result.pageId + '\\n' +
                 'トークン種別: ' + result.tokenType + '\\n' +
                 '有効期限: ' + result.expiresAt + '\\n\\n' +
-                '✅ 長期トークンへの変換完了\\n' +
+                '✅ 長期トークンを保存しました\\n' +
                 '✅ 設定シートに保存完了');
           google.script.host.close();
         } else {
           alert('❌ エラー: ' + result.error + '\\n\\n' +
                 '以下の点を確認してください：\\n' +
-                '• アプリIDとアプリシークレットが正しいか\\n' +
-                '• 短期トークンが正しくコピーされているか\\n' +
+                '• 長期トークンが正しくコピーされているか\\n' +
                 '• ページの管理者権限があるか\\n' +
                 '• トークンが有効期限内か');
         }
       }
-      
+
       function onFailure(error) {
         alert('❌ エラーが発生しました: ' + error.message);
       }
     </script>
   `)
-  .setWidth(600)
-  .setHeight(400);
-  
+  .setWidth(540)
+  .setHeight(360);
+
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Facebook トークン設定');
 }
 
 /**
  * HTMLダイアログから呼び出される処理関数
  */
-function processTokenInput(appId, appSecret, shortToken) {
+function processTokenInput(longToken) {
   try {
     // トークン設定を実行
-    const result = setupTokensFromManualInput(appId, appSecret, shortToken);
-    
+    const result = setupTokensFromLongToken(longToken);
+
     if (result.success) {
       // 設定シートに長期トークン情報を追記
       saveTokenToSettingsSheet(result);
-      
+
       return {
         success: true,
         pageName: result.pageName,
         pageId: result.pageId,
         tokenType: result.tokenType,
-        expiresAt: result.expiresAt.toLocaleString('ja-JP')
+        expiresAt: result.expiresAt ? result.expiresAt.toLocaleString('ja-JP') : '不明'
       };
     } else {
       return {

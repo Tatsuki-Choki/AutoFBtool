@@ -360,16 +360,30 @@ function processScheduledPosts() {
 }
 
 /**
+ * 指定ハンドラーの時間主導トリガーを分単位で作成（存在しない場合のみ）
+ * @param {string} handlerName
+ * @param {number} minutes
+ */
+function ensureMinutesTrigger(handlerName, minutes) {
+  const triggers = ScriptApp.getProjectTriggers();
+  const exists = triggers.some(t => t.getHandlerFunction && t.getHandlerFunction() === handlerName);
+  if (!exists) {
+    ScriptApp.newTrigger(handlerName).timeBased().everyMinutes(minutes).create();
+  }
+}
+
+/**
  * 予約投稿の時間主導トリガーを作成（5分毎）
  */
 function setupScheduledPostsTrigger() {
-  // 既存の同名トリガーを確認
-  const name = 'processScheduledPosts';
-  const triggers = ScriptApp.getProjectTriggers();
-  const exists = triggers.some(t => t.getHandlerFunction && t.getHandlerFunction() === name);
-  if (!exists) {
-    ScriptApp.newTrigger(name).timeBased().everyMinutes(5).create();
-  }
+  ensureMinutesTrigger('processScheduledPosts', 5);
+}
+
+/**
+ * コメント自動返信の時間主導トリガーを作成（30分毎）
+ */
+function setupAutoReplyTrigger() {
+  ensureMinutesTrigger('fetchAndRespond', 30);
 }
 
 
