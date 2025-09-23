@@ -309,9 +309,25 @@ function processScheduledPosts() {
   const last = sh.getLastRow();
   if (last < 2) return { posted: 0, failed: 0 };
 
-  const token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
-  if (!token) throw new Error('ページアクセストークンが未設定です');
+  let token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+  if (!token) throw new Error("ページアクセストークンが未設定です");
 
+  // トークンの有効性をチェックし、必要に応じて更新
+  try {
+    if (!isTokenValid(token)) {
+      console.log("トークンが無効または期限切れのため、自動更新を試行します...");
+      const refreshSuccess = refreshToken();
+      if (refreshSuccess) {
+        token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+        console.log("トークンが正常に更新されました");
+      } else {
+        throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+      }
+    }
+  } catch (error) {
+    console.error("トークン有効性チェックでエラー:", error);
+    throw new Error(`トークンの有効性確認に失敗しました: ${error.message}`);
+  }
   const now = new Date();
   const rows = sh.getRange(2, 1, last - 1, 10).getValues();
   let posted = 0;

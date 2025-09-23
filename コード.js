@@ -60,22 +60,19 @@ function createMenu() {
         .addItem('トークン設定', 'setupFromManualInput')
         .addItem('トークン情報を確認', 'showTokenInfo')
         .addItem('トークンを更新', 'refreshTokenManually'))
-      .addSubMenu(ui.createMenu('画像管理')
-        .addItem('ImgBB APIキー設定', 'showImageUploadSettings')
-        .addItem('複数画像一括アップロード', 'showBatchImageUploadDialog')
-        .addItem('画像アップロードテスト', 'testImageUpload'))
       .addSeparator()
       .addItem('コメント取得→返信 実行', 'fetchAndRespond')
-        .addItem('予約投稿（手動実行）', 'runScheduledPostsNow')
-        .addItem('未返信に一括返信（直近12時間）', 'runAutoReplyForLast12hUnreplied')
-        .addItem('シートを最新の状態に更新', 'updateSheetsToLatest')
-        .addSeparator()
-        .addItem('⚠️ 全てのシートを再構成', 'rebuildAllSheets')
+      .addItem('予約投稿（手動実行）', 'runScheduledPostsNow')
+      .addItem('未返信に一括返信（直近12時間）', 'runAutoReplyForLast12hUnreplied')
+      .addItem('シートを最新の状態に更新', 'updateSheetsToLatest')
+      .addItem('取得した投稿を更新', 'updatePostsSheetManually')
+      .addSeparator()
+      .addItem('⚠️ 全てのシートを再構成', 'rebuildAllSheets')
       .addToUi();
 
     ui.createMenu('クイックセットアップ')
       .addItem('アカウント確認とトリガー初期化', 'runQuickSetup')
-      .addToUi();
+    .addToUi();
   } catch (error) {
     console.error('メニュー作成エラー:', error);
   }
@@ -97,12 +94,32 @@ function runQuickSetup() {
     const expiresAt = tokenInfo.expiresAt ? tokenInfo.expiresAt.toLocaleString('ja-JP') : '不明';
     const status = tokenInfo.isValid ? '有効' : '無効または期限切れ';
 
+    // 設定シートに値を自動入力
+    if (pageId !== '未設定') {
+      upsertSetting('ページID', pageId, 'FacebookページID（自動設定）');
+    }
+    if (expiresAt !== '不明') {
+      upsertSetting('トークン有効期限', expiresAt, 'トークンの有効期限（自動設定）');
+    }
+    if (pageName !== '未設定') {
+      upsertSetting('ページ名', pageName, 'Facebookページ名（自動設定）');
+    }
+    
+    // 最終更新日時を設定
+    const now = new Date().toLocaleString('ja-JP');
+    upsertSetting('最終更新日時', now, '最後にトークンを更新した日時（自動設定）');
+
     ui.alert(
       'クイックセットアップが完了しました。\n\n' +
       `ページ名: ${pageName}\n` +
       `ページID: ${pageId}\n` +
       `トークン有効期限: ${expiresAt}\n` +
       `トークン状態: ${status}\n\n` +
+      '設定シートに以下の項目が自動入力されました：\n' +
+      '• ページID\n' +
+      '• トークン有効期限\n' +
+      '• ページ名\n' +
+      '• 最終更新日時\n\n' +
       '予約投稿トリガー（5分間隔）と自動返信トリガー（30分間隔）を再作成しました。'
     );
   } catch (error) {
@@ -134,14 +151,29 @@ function runAutoReplyForLast12hUnreplied() {
  * @return {{total:number,replied:number,failed:number,skipped:number}}
  */
 function replyUnrepliedCommentsLast12h() {
-  const token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
-  if (!token) throw new Error('アクセストークンが未設定です。');
+  let token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+  if (!token) throw new Error("アクセストークンが未設定です。");
+
+  // トークンの有効性をチェックし、必要に応じて更新
+  try {
+    if (!isTokenValid(token)) {
+      console.log("トークンが無効または期限切れのため、自動更新を試行します...");
+      const refreshSuccess = refreshToken();
+      if (refreshSuccess) {
+        token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+        console.log("トークンが正常に更新されました");
+      } else {
+        throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+      }
+    }
+  } catch (error) {
+    console.error("トークン有効性チェックでエラー:", error);
+    throw new Error(`トークンの有効性確認に失敗しました: ${error.message}`);
+  }
 
   const settings = getSettings();
   const postIds = getTargetPostIds(token, settings);
-  if (postIds.length === 0) throw new Error('対象投稿がありません。');
-
-  const rules = loadRules();
+  if (postIds.length === 0) throw new Error("対象投稿がありません。");
   const repliedSet = loadRepliedCommentIdsSet();
   const sinceMs = Date.now() - (12 * 60 * 60 * 1000);
 
@@ -211,17 +243,35 @@ function initSheets() {
 
 
 // ========== メイン: 取得→判定→返信 ==========
+// ========== メイン: 取得→判定→返信 ==========
 function fetchAndRespond() {
-  const token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
-  if (!token) throw new Error('アクセストークンが未設定です。メニューから「トークン管理」→「トークン設定」を実行してください。');
+  let token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+  if (!token) throw new Error("アクセストークンが未設定です。メニューから「トークン管理」→「トークン設定」を実行してください。");
+
+  // トークンの有効性をチェックし、必要に応じて更新
+  try {
+    if (!isTokenValid(token)) {
+      console.log("トークンが無効または期限切れのため、自動更新を試行します...");
+      const refreshSuccess = refreshToken();
+      if (refreshSuccess) {
+        token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+        console.log("トークンが正常に更新されました");
+      } else {
+        throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+      }
+    }
+  } catch (error) {
+    console.error("トークン有効性チェックでエラー:", error);
+    throw new Error(`トークンの有効性確認に失敗しました: ${error.message}`);
+  }
 
   const settings = getSettings();
-  const fetchLimit = parseInt(settings.get('取得件数') || '50', 10);
+  const fetchLimit = parseInt(settings.get("取得件数") || "50", 10);
 
   // 対象投稿IDを取得
   const postIds = getTargetPostIds(token, settings);
   if (postIds.length === 0) {
-    throw new Error('対象投稿がありません。投稿IDを指定するか、自動検出=trueで直近投稿があることを確認してください。');
+    throw new Error("対象投稿がありません。投稿IDを指定するか、自動検出=trueで直近投稿があることを確認してください。");
   }
 
   const rules = loadRules();
@@ -230,6 +280,37 @@ function fetchAndRespond() {
   // 各投稿のコメントを処理
   for (const postId of postIds) {
     processComments(postId, token, fetchLimit, rules, processedSet);
+  }
+}
+
+/**
+ * 「取得した投稿」シートを手動更新する
+ */
+function updatePostsSheetManually() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    let token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+    if (!token) throw new Error('ページアクセストークンが未設定です');
+
+    // トークンチェック＆自動更新
+    if (!isTokenValid(token)) {
+      const ok = refreshToken();
+      if (!ok) throw new Error('トークンの自動更新に失敗しました');
+      token = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+    }
+
+    const settings = getSettings();
+    const lookbackDays = parseInt(settings.get('検索日数') || '3', 10);
+    const maxCount = parseInt(settings.get('最大投稿数') || '10', 10);
+
+    // 取得とシート反映（関数内で反映済みのため、ここでは呼ぶだけ）
+    const posts = fetchRecentPosts(token, lookbackDays, maxCount);
+    const reels = typeof fetchRecentReels === 'function' ? fetchRecentReels(token, lookbackDays, maxCount) : [];
+    const total = (posts?.length || 0) + (reels?.length || 0);
+
+    ui.alert(`「取得した投稿」シートを更新しました。\n取得件数: ${total}`);
+  } catch (e) {
+    ui.alert(`❌ エラー: ${e && e.message ? e.message : e}`);
   }
 }
 
@@ -360,27 +441,32 @@ function saveTokenToSettingsSheet(tokenInfo) {
 
 
 /**
- * トークン情報を表示（デバッグ情報付き）
+ * トークン情報を表示（/debug_token対応版）
  */
 function showTokenInfo() {
   const ui = SpreadsheetApp.getUi();
   const tokenInfo = getTokenInfo();
   
-  // デバッグ情報を取得
-  let debugInfo = '';
+  // 詳細なデバッグ情報を取得
+  let detailedInfo = '';
   try {
-    const props = PropertiesService.getScriptProperties();
-    const userToken = props.getProperty('USER_ACCESS_TOKEN');
-    const expiresAt = props.getProperty('TOKEN_EXPIRES_AT');
-    
-    if (userToken) {
-      const tokenDetails = getTokenInfoFromToken(userToken);
-      debugInfo = `\n\n【デバッグ情報】\n` +
-        `API有効期限: ${tokenDetails.expires_in ? Math.round(tokenDetails.expires_in / 86400) + '日' : '不明'}\n` +
-        `保存された有効期限: ${expiresAt ? new Date(parseInt(expiresAt)).toLocaleString('ja-JP') : '不明'}`;
+    if (tokenInfo.detailedInfo) {
+      const details = tokenInfo.detailedInfo;
+      detailedInfo = `\n\n【詳細情報】\n` +
+        `アプリID: ${details.アプリID || '不明'}\n` +
+        `トークンタイプ: ${details.トークンタイプ || '不明'}\n` +
+        `アプリケーション名: ${details.アプリケーション名 || '不明'}\n` +
+        `有効状態: ${details.有効状態 || '不明'}\n` +
+        `長期トークン: ${details.長期トークン || '不明'}\n` +
+        `有効期限: ${details.有効期限 || '不明'}\n` +
+        `残り時間: ${details.残り時間 || '不明'}\n` +
+        `データアクセス期限: ${details.データアクセス期限 || '不明'}\n` +
+        `権限スコープ: ${details.権限スコープ || '不明'}`;
+    } else {
+      detailedInfo = `\n\n【詳細情報】\n詳細情報の取得に失敗しました`;
     }
   } catch (error) {
-    debugInfo = `\n\n【デバッグ情報】\nエラー: ${error.message}`;
+    detailedInfo = `\n\n【詳細情報】\nエラー: ${error.message}`;
   }
   
   const message = 
@@ -389,7 +475,7 @@ function showTokenInfo() {
     `ページID: ${tokenInfo.pageId}\n` +
     `有効期限: ${tokenInfo.expiresAt ? tokenInfo.expiresAt.toLocaleString('ja-JP') : '不明'}\n` +
     `状態: ${tokenInfo.isValid ? '有効' : '無効または期限切れ'}` +
-    debugInfo;
+    detailedInfo;
   
   ui.alert(message);
 }

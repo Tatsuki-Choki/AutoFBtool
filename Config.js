@@ -21,8 +21,7 @@ const PROP_KEYS = {
   PAGE_NAME: 'FB_PAGE_NAME',
   TOKEN_EXPIRES_AT: 'FB_TOKEN_EXPIRES_AT',
   APP_ID: 'FB_APP_ID',
-  APP_SECRET: 'FB_APP_SECRET',
-  IMGBB_API_KEY: 'IMGBB_API_KEY'
+  APP_SECRET: 'FB_APP_SECRET'
 };
 
 // Facebook API設定
@@ -59,10 +58,7 @@ const DEFAULT_SETTINGS = {
   'Facebook API バージョン': 'v23.0',
   'レート制限待機時間': '300',
   'ログ保持日数': '30',
-  'エラー通知設定': 'false',
-  
-  // 画像管理設定
-  'ImgBB APIキー': ''
+  'エラー通知設定': 'false'
 };
 
 // 設定の説明
@@ -94,10 +90,7 @@ const SETTING_DESCRIPTIONS = {
   'Facebook API バージョン': '使用するFacebook Graph APIのバージョン',
   'レート制限待機時間': 'API呼び出し間の待機時間（ミリ秒）',
   'ログ保持日数': 'ログを保持する日数',
-  'エラー通知設定': 'エラー発生時の通知設定（true/false）',
-  
-  // 画像管理設定
-  'ImgBB APIキー': 'ImgBB APIキー（画像アップロード用）'
+  'エラー通知設定': 'エラー発生時の通知設定（true/false）'
 };
 
 /**

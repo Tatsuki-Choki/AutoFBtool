@@ -1,0 +1,8 @@
+# Ignore backups
+*.backup
+.clasp.json.backup
+.clasp.json.backup2
+
+# Node/others
+node_modules/
+.DS_Store

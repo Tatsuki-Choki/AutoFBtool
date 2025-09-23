@@ -87,7 +87,15 @@ function getTargetPostIds(token, settings) {
   if (autoDiscovery) {
     // ページトークンの妥当性を確認
     getPageInfo(token);
-    return fetchRecentPosts(token, lookbackDays, postMaxCount);
+    const posts = fetchRecentPosts(token, lookbackDays, postMaxCount);
+    const reels = fetchRecentReels(token, lookbackDays, postMaxCount);
+    // 先に通常投稿、続いてリール。重複排除
+    const seen = new Set();
+    const merged = [];
+    for (const id of [...posts, ...reels]) {
+      if (!seen.has(id)) { seen.add(id); merged.push(id); }
+    }
+    return merged;
   }
 
   return [];

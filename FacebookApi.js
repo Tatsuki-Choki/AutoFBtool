@@ -21,10 +21,33 @@ function fetchComments(postId, token, limit) {
 
   const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
   const code = res.getResponseCode();
+  const responseText = res.getContentText();
+  
   if (code < 200 || code >= 300) {
-    throw new Error(`GET comments failed: ${code} ${res.getContentText()}`);
+    console.error(`GET comments failed: ${code} ${responseText}`);
+    
+    // トークン期限切れエラーの場合、自動更新を試行
+    if (code === 400 && responseText.includes("Session has expired")) {
+      console.log("トークンが期限切れのため、自動更新を試行します...");
+      try {
+        const refreshSuccess = refreshToken();
+        if (refreshSuccess) {
+          const newToken = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+          console.log("トークンが更新されました。再試行します...");
+          return fetchComments(postId, newToken, limit); // 再帰的に再試行
+        } else {
+          throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+        }
+      } catch (refreshError) {
+        console.error("トークン更新エラー:", refreshError);
+        throw new Error(`トークンの自動更新に失敗しました: ${refreshError.message}`);
+      }
+    }
+    
+    throw new Error(`GET comments failed: ${code} ${responseText}`);
   }
-  const json = JSON.parse(res.getContentText());
+  
+  const json = JSON.parse(responseText);
   return Array.isArray(json.data) ? json.data : [];
 }
 
@@ -48,10 +71,33 @@ function fetchCommentsSince(postId, token, sinceMs, limit) {
 
   const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
   const code = res.getResponseCode();
+  const responseText = res.getContentText();
+  
   if (code < 200 || code >= 300) {
-    throw new Error(`GET comments(since) failed: ${code} ${res.getContentText()}`);
+    console.error(`GET comments(since) failed: ${code} ${responseText}`);
+    
+    // トークン期限切れエラーの場合、自動更新を試行
+    if (code === 400 && responseText.includes("Session has expired")) {
+      console.log("トークンが期限切れのため、自動更新を試行します...");
+      try {
+        const refreshSuccess = refreshToken();
+        if (refreshSuccess) {
+          const newToken = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+          console.log("トークンが更新されました。再試行します...");
+          return fetchCommentsSince(postId, newToken, sinceMs, limit); // 再帰的に再試行
+        } else {
+          throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+        }
+      } catch (refreshError) {
+        console.error("トークン更新エラー:", refreshError);
+        throw new Error(`トークンの自動更新に失敗しました: ${refreshError.message}`);
+      }
+    }
+    
+    throw new Error(`GET comments(since) failed: ${code} ${responseText}`);
   }
-  const json = JSON.parse(res.getContentText());
+  
+  const json = JSON.parse(responseText);
   return Array.isArray(json.data) ? json.data : [];
 }
 
@@ -67,11 +113,34 @@ function postReply(commentId, message, token) {
   const payload = { message: message, access_token: token };
   const res = UrlFetchApp.fetch(url, { method: 'post', payload: payload, muteHttpExceptions: true });
   const code = res.getResponseCode();
+  const responseText = res.getContentText();
+  
   if (code < 200 || code >= 300) {
-    throw new Error(`POST reply failed: ${code} ${res.getContentText()}`);
+    console.error(`POST reply failed: ${code} ${responseText}`);
+    
+    // トークン期限切れエラーの場合、自動更新を試行
+    if (code === 400 && responseText.includes("Session has expired")) {
+      console.log("トークンが期限切れのため、自動更新を試行します...");
+      try {
+        const refreshSuccess = refreshToken();
+        if (refreshSuccess) {
+          const newToken = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+          console.log("トークンが更新されました。再試行します...");
+          return postReply(commentId, message, newToken); // 再帰的に再試行
+        } else {
+          throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+        }
+      } catch (refreshError) {
+        console.error("トークン更新エラー:", refreshError);
+        throw new Error(`トークンの自動更新に失敗しました: ${refreshError.message}`);
+      }
+    }
+    
+    throw new Error(`POST reply failed: ${code} ${responseText}`);
   }
-  const json = JSON.parse(res.getContentText());
-  if (!json || !json.id) throw new Error(`POST reply unexpected response: ${res.getContentText()}`);
+  
+  const json = JSON.parse(responseText);
+  if (!json || !json.id) throw new Error(`POST reply unexpected response: ${responseText}`);
   return json.id;
 }
 
@@ -86,11 +155,34 @@ function createPagePost(message, token) {
   const payload = { message: message, access_token: token };
   const res = UrlFetchApp.fetch(url, { method: 'post', payload: payload, muteHttpExceptions: true });
   const code = res.getResponseCode();
+  const responseText = res.getContentText();
+  
   if (code < 200 || code >= 300) {
-    throw new Error(`POST feed failed: ${code} ${res.getContentText()}`);
+    console.error(`POST feed failed: ${code} ${responseText}`);
+    
+    // トークン期限切れエラーの場合、自動更新を試行
+    if (code === 400 && responseText.includes("Session has expired")) {
+      console.log("トークンが期限切れのため、自動更新を試行します...");
+      try {
+        const refreshSuccess = refreshToken();
+        if (refreshSuccess) {
+          const newToken = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+          console.log("トークンが更新されました。再試行します...");
+          return createPagePost(message, newToken); // 再帰的に再試行
+        } else {
+          throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+        }
+      } catch (refreshError) {
+        console.error("トークン更新エラー:", refreshError);
+        throw new Error(`トークンの自動更新に失敗しました: ${refreshError.message}`);
+      }
+    }
+    
+    throw new Error(`POST feed failed: ${code} ${responseText}`);
   }
-  const json = JSON.parse(res.getContentText());
-  if (!json || !json.id) throw new Error(`POST feed unexpected response: ${res.getContentText()}`);
+  
+  const json = JSON.parse(responseText);
+  if (!json || !json.id) throw new Error(`POST feed unexpected response: ${responseText}`);
 
   // パーマリンクを取得
   let permalink = '';
@@ -117,10 +209,33 @@ function getPageInfo(token) {
   const url = `${FB.BASE}/me?fields=id,name&access_token=${encodeURIComponent(token)}`;
   const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
   const code = res.getResponseCode();
+  const responseText = res.getContentText();
+  
   if (code < 200 || code >= 300) {
-    throw new Error(`GET /me failed: ${code} ${res.getContentText()}`);
+    console.error(`GET /me failed: ${code} ${responseText}`);
+    
+    // トークン期限切れエラーの場合、自動更新を試行
+    if (code === 400 && responseText.includes("Session has expired")) {
+      console.log("トークンが期限切れのため、自動更新を試行します...");
+      try {
+        const refreshSuccess = refreshToken();
+        if (refreshSuccess) {
+          const newToken = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+          console.log("トークンが更新されました。再試行します...");
+          return getPageInfo(newToken); // 再帰的に再試行
+        } else {
+          throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+        }
+      } catch (refreshError) {
+        console.error("トークン更新エラー:", refreshError);
+        throw new Error(`トークンの自動更新に失敗しました: ${refreshError.message}`);
+      }
+    }
+    
+    throw new Error(`GET /me failed: ${code} ${responseText}`);
   }
-  const json = JSON.parse(res.getContentText());
+  
+  const json = JSON.parse(responseText);
   if (!json || !json.id) throw new Error('ページIDを取得できませんでした。アクセストークンが「ページ用」か確認してください。');
   return { pageId: String(json.id), pageName: json.name || '' };
 }
@@ -143,10 +258,33 @@ function fetchRecentPosts(token, lookbackDays, maxCount) {
   
   const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
   const code = res.getResponseCode();
+  const responseText = res.getContentText();
+  
   if (code < 200 || code >= 300) {
-    throw new Error(`GET /me/posts failed: ${code} ${res.getContentText()}`);
+    console.error(`GET /me/posts failed: ${code} ${responseText}`);
+    
+    // トークン期限切れエラーの場合、自動更新を試行
+    if (code === 400 && responseText.includes("Session has expired")) {
+      console.log("トークンが期限切れのため、自動更新を試行します...");
+      try {
+        const refreshSuccess = refreshToken();
+        if (refreshSuccess) {
+          const newToken = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+          console.log("トークンが更新されました。再試行します...");
+          return fetchRecentPosts(newToken, lookbackDays, maxCount); // 再帰的に再試行
+        } else {
+          throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+        }
+      } catch (refreshError) {
+        console.error("トークン更新エラー:", refreshError);
+        throw new Error(`トークンの自動更新に失敗しました: ${refreshError.message}`);
+      }
+    }
+    
+    throw new Error(`GET /me/posts failed: ${code} ${responseText}`);
   }
-  const json = JSON.parse(res.getContentText());
+  
+  const json = JSON.parse(responseText);
   const data = Array.isArray(json.data) ? json.data : [];
   
   // Postsシートに記録
@@ -157,4 +295,68 @@ function fetchRecentPosts(token, lookbackDays, maxCount) {
   }
   
   return data.map(p => p.id).filter(Boolean);
+}
+
+/**
+ * 直近のリールを取得する（自身が投稿したもの）
+ * @param {string} token アクセストークン（ページ）
+ * @param {number} lookbackDays 過去何日分を取得するか
+ * @param {number} maxCount 最大取得件数
+ * @return {Array} リールID配列
+ */
+function fetchRecentReels(token, lookbackDays, maxCount) {
+  try {
+    const { pageId } = getPageInfo(token);
+    const sinceTs = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+    const sinceParam = Math.floor(sinceTs.getTime() / 1000);
+    const url = `${FB.BASE}/${encodeURIComponent(pageId)}/video_reels` +
+      `?fields=id,created_time,permalink_url` +
+      `&since=${sinceParam}` +
+      `&limit=${encodeURIComponent(String(maxCount))}` +
+      `&access_token=${encodeURIComponent(token)}`;
+
+    const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
+    const code = res.getResponseCode();
+    const responseText = res.getContentText();
+
+    if (code < 200 || code >= 300) {
+      console.error(`GET /{page-id}/video_reels failed: ${code} ${responseText}`);
+
+      // トークン期限切れエラーの場合、自動更新を試行
+      if (code === 400 && responseText.includes("Session has expired")) {
+        console.log("トークンが期限切れのため、自動更新を試行します...");
+        try {
+          const refreshSuccess = refreshToken();
+          if (refreshSuccess) {
+            const newToken = PropertiesService.getScriptProperties().getProperty(PROP_KEYS.PAGE_ACCESS_TOKEN);
+            console.log("トークンが更新されました。再試行します...");
+            return fetchRecentReels(newToken, lookbackDays, maxCount); // 再帰的に再試行
+          } else {
+            throw new Error("トークンの自動更新に失敗しました。手動でトークンを更新してください。");
+          }
+        } catch (refreshError) {
+          console.error("トークン更新エラー:", refreshError);
+          throw new Error(`トークンの自動更新に失敗しました: ${refreshError.message}`);
+        }
+      }
+
+      // 許可されていない・未サポートの場合は空配列で返却（ソフトフォールバック）
+      return [];
+    }
+
+    const json = JSON.parse(responseText);
+    const data = Array.isArray(json.data) ? json.data : [];
+
+    // Postsシートに記録
+    if (data.length) {
+      const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.POSTS);
+      const rows = data.map(p => [p.id || '', p.permalink_url || '', p.created_time || '']);
+      sh.getRange(sh.getLastRow() + 1, 1, rows.length, 3).setValues(rows);
+    }
+
+    return data.map(p => p.id).filter(Boolean);
+  } catch (e) {
+    console.warn('リール取得に失敗（フォールバックで続行）:', e && e.message ? e.message : e);
+    return [];
+  }
 }
