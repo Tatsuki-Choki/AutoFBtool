@@ -54,14 +54,14 @@ function createMenu() {
     const ui = SpreadsheetApp.getUi();
 
     ui.createMenu('ツール設定')
-      .addItem('1) 初期化: シート生成', 'initSheets')
+    .addItem('1) 初期化: シート生成', 'initSheets')
       .addSeparator()
       .addSubMenu(ui.createMenu('トークン管理')
         .addItem('トークン設定', 'setupFromManualInput')
         .addItem('トークン情報を確認', 'showTokenInfo')
         .addItem('トークンを更新', 'refreshTokenManually'))
-      .addSeparator()
-      .addItem('コメント取得→返信 実行', 'fetchAndRespond')
+    .addSeparator()
+    .addItem('コメント取得→返信 実行', 'fetchAndRespond')
       .addItem('予約投稿（手動実行）', 'runScheduledPostsNow')
       .addItem('未返信に一括返信（直近12時間）', 'runAutoReplyForLast12hUnreplied')
       .addItem('シートを最新の状態に更新', 'updateSheetsToLatest')
@@ -183,7 +183,7 @@ function replyUnrepliedCommentsLast12h() {
   let skipped = 0;
 
   for (const postId of postIds) {
-    const comments = fetchCommentsSince(postId, token, sinceMs, 200) || [];
+    const comments = fetchCommentsSince(postId, token, sinceMs, 500) || [];
     for (const c of comments) {
       const commentId = String(c.id || '').trim();
       if (!commentId) { skipped++; continue; }
@@ -266,7 +266,7 @@ function fetchAndRespond() {
   }
 
   const settings = getSettings();
-  const fetchLimit = parseInt(settings.get("取得件数") || "50", 10);
+  const fetchLimit = Math.min(500, parseInt(settings.get("取得件数") || "500", 10));
 
   // 対象投稿IDを取得
   const postIds = getTargetPostIds(token, settings);

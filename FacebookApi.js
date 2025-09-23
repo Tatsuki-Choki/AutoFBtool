@@ -16,7 +16,7 @@ function fetchComments(postId, token, limit) {
   const url = `${FB.BASE}/${encodeURIComponent(postId)}/comments` +
     `?fields=${fields}` +
     `&filter=${encodeURIComponent('stream')}` +
-    `&limit=${encodeURIComponent(String(limit))}` +
+    `&limit=${encodeURIComponent(String(Math.min(500, Number(limit) || 500)))}` +
     `&access_token=${encodeURIComponent(token)}`;
 
   const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
@@ -66,7 +66,7 @@ function fetchCommentsSince(postId, token, sinceMs, limit) {
     `?fields=${fields}` +
     `&filter=${encodeURIComponent('stream')}` +
     `&since=${encodeURIComponent(String(sinceSec))}` +
-    `&limit=${encodeURIComponent(String(limit || 200))}` +
+    `&limit=${encodeURIComponent(String(Math.min(500, Number(limit) || 500)))}` +
     `&access_token=${encodeURIComponent(token)}`;
 
   const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
